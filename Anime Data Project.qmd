@@ -1,0 +1,782 @@
+---
+title: "Anime Data Project"
+author: "Mardan Mirzaguliyev"
+format: pdf
+editor: visual
+date: "`r Sys.Date()`"
+---
+
+![](Anime_Junge.jpg){width="445"}
+
+# ITRODUCTION
+
+When I worked at the book store, young people, especially teenagers used to come and ask about animes. Some of them had watched TV episodes of these animes and now wanted to try out the book version of them. Personally, I was not a fan of animes but as time went by I started to shift my attitude to them. So, when I found this [data set](https://www.kaggle.com/datasets/CooperUnion/anime-recommendations-database) on [Kaggle](https://www.kaggle.com), I decided to pick it up and try to better understand anime as an artistic genre and if possible get answers to some of the general questions like what attracts teenagers to this genre and some of the specific questions like what are the most popular topics and what are the most popular sub-genres like crime, horror, sci-fi and so on. Of course, when the data set was explored in deep, more questions arises and I tried to write them down as well, and answer them.
+
+As mentioned above the data set was downloaded from the data set section of [Kaggle](https://www.kaggle.com) website. In the about and context section of data set it is informed that it contains "information on user preference data from 73,516 users on 12,294 anime. Each user is able to add anime to their completed list and give it a rating and this data set is a compilation of those ratings".
+
+There two CSV files in the data set:
+
+-   anime.csv
+
+-   rating.csv
+
+    **anime.csv** file have the below variables and corresponding observations:
+
+-   anime_id - [myanimelist.net](https://myanimelist.net)'s unique id identifying an anime.
+
+-   name - full name of anime.
+
+-   genre - comma separated list of genres for this anime.
+
+-   type - movie, TV, OVA, etc.
+
+-   episodes - how many episodes in this show. (1 if movie).
+
+-   rating - average rating out of 10 for this anime.
+
+    members - number of community members that are in this anime's "group".
+
+    **rating.csv** file have three variables:
+
+-   user_id - non identifiable randomly generated user id.
+
+-   anime_id - the anime that this user has rated.
+
+-   rating - rating out of 10 this user has assigned (-1 if the user watched it but didn't assign a rating).
+
+    Some of the terms related to the context:
+
+-   [OVA](https://www.cbr.com/anime-ova-oav-ona-differences-explained/) - original video animation
+
+-   [ONA](https://www.cbr.com/anime-ova-oav-ona-differences-explained/) - original net animation
+
+-   [Special](https://anime.stackexchange.com/questions/16728/what-are-ovas-and-how-are-they-different-from-specials#:~:text=OVAs%20are%20often%20shorter%20than,%22special%20episode%22%20of%20anything.) - (aka TV Special) is not weekly. Usually yearly or one shot. It's have only one episode but it's have longer length (ex 2 hours). It's still intended for broadcast. Need to meet broadcast code.
+
+    # **ASK - QUESTIONS TO ANSWER**
+
+    These were the questions considered the most important to answer and get insights about:
+
+    1.  What are the most popular genres for animes (Number of mangas represented)?
+    2.  What are the most popular types for animes (Number of mangas represented)?
+    3.  What are the maximum and minimum ratings that the specific genres received and which genres have the highest user rating?
+    4.  What is the type of an animes that got the highest ratings?
+    5.  What is the maximum number of episodes and which anime it is with the maximum number of episodes?
+    6.  Is there any relationship between number of episodes and rating?
+    7.  Is there any relationship between the number of members and rating?
+
+    # PREPARE - LOADING THE DATA SET TO R, EDA
+
+    To load CSV files to R core R function `read_csv` function from the `readr` package was used which is the part of the `tidyverse` collection of packages. Also, `psych`, `ggthemes`, `e1071` packages was loaded to conduct auxiliary works on data frame:
+
+    ```{r message=FALSE}
+    # Load packages
+    library(tidyverse)
+    library(psych)
+    library(ggthemes)
+    library(e1071)
+    library(pacman)
+    ```
+
+```{r}
+# Load packages needed for wordcloud creation
+pacman::p_load("tm",
+               "SnowballC",
+               "wordcloud",
+               "RColorBrewer",                 
+               "RCurl",
+               "XML")
+```
+
+```{r}
+# Load data sets into R
+anime <- read_csv(file = "anime.csv", 
+                  na = c("", "Unknown"))
+```
+
+```{r}
+rating <- read.csv(file = "rating.csv")
+```
+
+## EDA
+
+After loading data sets, different R functions were applied to the whole data frames and/or specific variables to better understand the information they contain.
+
+### Exploration of Anime data set
+
+```{r}
+# View first few lines to know what kind of information a data frame contains
+head(anime)
+```
+
+```{r}
+# Get summary statistics of the data frame
+summary(anime)
+```
+
+```{r}
+# Check the data types of each column
+str(anime)
+```
+
+```{r}
+# number of columns and rows
+ncol(anime)
+nrow(anime)
+```
+
+```{r}
+# Names of columns
+colnames(anime)
+```
+
+#### Genre
+
+In anime data set one of the most interesting variable is genre column. It is quite complicated column because of the general difficulty to attach one anime to the single genre. Instead, one anime has multiple genres, for instance, 'Action, Adventure, Comedy' or 'Romance, Fantasy, Ecci, Sci-Fi' etc. So, the unique list of these combinations were saved in a vector:
+
+```{r}
+anime_genres <- unique(anime$genre)
+```
+
+To get the real genre names that form these combinations first these combinations collapsed into the pieces based on the comma separating them. Then, from these collapsed words unique elements combined into a vector
+
+In order to solve this problem, data in genre column should be split into single characters and then unique characters should be combined again into a vector:
+
+```{r}
+# Split the genre column into a list of genres for each row
+genre_lists <- strsplit(anime$genre, ", ")
+
+# Combine all unique genres into one vector
+unique_genres <- unique(unlist(genre_lists))
+
+# Print the unique genres
+unique_genres
+```
+
+```{r}
+# Get the length of the new vector which is the count of the real unique genres
+length(unique_genres)
+```
+
+So, the number of unique genres is actually 44. But as shown in the data set it is difficult to attach one genre to the single anime. Hence, genre column consists of the genres that are the combination of these 44 genres. Of course, there are also mangas in the original data set that have just one single genre.
+
+In order to identify the position of the single genre inside combinations the frequency table and wordcloud were considered useful:
+
+```{r}
+script <- "wordcloud.R"
+```
+
+```{r warning=FALSE}
+source(script)
+
+word_cloud <- rquery.wordcloud(anime_genres, 
+                      type ="text", 
+                      lang = "english",
+                      textStemming=FALSE,
+                      min.freq=1, 
+                      max.words=2000)
+```
+
+```{r}
+freq_table <- word_cloud$freqTable
+freq_table
+```
+
+So, the combinations mostly contains the genres and topics that are comedy, action, drama, adventure and so on.
+
+Another method to understand this column is to group and summarize animes by genre column:
+
+```{r}
+genres_group <- anime |> 
+  group_by(genre) |> 
+  summarise(anime_count = n()) |> 
+  arrange(desc(anime_count))
+
+genres_group
+```
+
+```{r}
+# Summary statistic of the number of animes related to the genres
+describe(genres_group$anime_count)
+```
+
+Grouped data was then filtered to contain genres that have been attached to the 50 and more animes:
+
+```{r}
+# Create a filtered version of grouped data
+genres_group_50 <- genres_group |> 
+  filter(anime_count >= 50)
+```
+
+```{r}
+# Create a bar chart to visualize genre and their counts based on grouped data
+ggplot(data = genres_group_50,
+                    aes(x = as_factor(genre), 
+                        y = anime_count)) +
+  geom_bar(stat = "identity", 
+           fill = "blue") +
+  coord_flip() +
+  labs(x = "Genre",
+       y = "Number of animes",
+       title = "Anime Genres and their representation",
+       fill = "Count") + 
+  theme_clean(base_size = 12, 
+              base_family = "sans")
+```
+
+Both grouped data and visualization shows that there are 62 animes without genres mentioned. This problem needs to be addressed in data processing phase of the analysis.
+
+```{r}
+# Presentation of the number of animes
+ggplot(genres_group_50, aes(x = anime_count)) + 
+  geom_boxplot(outlier.colour = "red",
+               outlier.shape = 4) +
+  theme_clean(base_size = 12, 
+              base_family = "sans") +
+  labs(title = "Distribution of animes by genre",
+       x = "Number of animes")
+```
+
+At this point of the analysis there is already an answer to the first question: Even though the comedy genre are the mostly mentioned genre in combinations, Hentai genre has more mangas attached to it in the data set followed by Comedy and Music. So, this is the answer to the first question asked:
+
+1.  **What are the most popular genres for anime (Number of mangas represented)?**
+
+#### **Type**
+
+Another variable that contains valuable information about the animes is the \`type\` variable. It represents a type of media that animes have been introduced like TV series, movie, OVA, ONA etc:
+
+```{r}
+unique(anime$type)
+```
+
+```{r}
+# Grouping based on types
+types_group <- anime |> 
+  group_by(type) |> 
+  summarise(anime_count = n()) |>  
+  arrange(desc(anime_count))
+
+types_group
+```
+
+Grouping reveals that most of the animes have been introduced in TV format. OVA and movies are the second and the third most widely used types of animes. There are also 25 animes without any type values:
+
+```{r}
+anime |> 
+  filter(is.na(type))
+```
+
+Type, the number of episodes and rating information were missing for these 25 animes. As they were very small portion of the data best way was considered to filter them out:
+
+```{r}
+types_group <- anime |> 
+  filter(!is.na(type)) |> 
+  group_by(type) |> 
+  summarise(anime_count = n()) |>  
+  arrange(desc(anime_count))
+
+types_group
+```
+
+```{r}
+# Create a bar chart to visualize types and their counts based on grouped data
+ggplot(data = types_group, 
+                   aes(x = as_factor(type),
+                       y = anime_count)) + 
+  geom_bar(stat = "identity", 
+                    fill ="blue") +
+  labs(x = "Type",
+       y = "Number of animes",
+       title = "Anime types and their representation") + 
+  theme_clean(base_size = 12, 
+              base_family = "sans")
+```
+
+```{r}
+# Presentation of the number of animes
+ggplot(types_group, aes(x = anime_count)) +
+  geom_boxplot(outlier.colour = "red",
+               outlier.shape = 4) +
+  theme_clean(base_size = 12,
+              base_family = "sans") +
+  labs(title = "Distribution of animes by types",
+       x = "Number of animes")
+```
+
+The number of animes attached to each type seem to be more normally distributed than of genres.
+
+#### Episodes
+
+Episodes column had a data type of character which makes it less useful for analysis. In order to, conduct mathematical operations on this variable its data type was needed to be converted to double. But first, it would be interesting to check if it was containing any NA values as its raw form:
+
+```{r}
+# Check data type of episodes
+typeof(anime$episodes)
+```
+
+```{r}
+# Check numbers of NAs
+sum(is.na(anime$episodes))
+```
+
+So, there is no NA values in it. Now, it is time to view the unique values of the variable:
+
+```{r}
+unique(anime$episodes)
+```
+
+But it contains the string "Unknown" which will be converted to NA if `as.double()` function is applied to change the data type.
+
+```{r}
+total_unknown <- sum(anime$episodes == "Unknown")
+total_unknown
+```
+
+The Data frame was removed and imported again to consider "Unknown" values as NAs. This was done in the same script above and after importing it type conversion was conducted:
+
+```{r warning=FALSE}
+# Convert episodes to the number type
+anime$episodes <- as.double(anime$episodes)
+```
+
+So, 340 "Unknown" values are now NAs which is R's way to denote unknown values. Conversion completed successfully and now statistical functions can be applied to this variable:
+
+```{r}
+# Minimum number of episodes
+min(anime$episodes, na.rm = TRUE)
+
+# Maximum number of episodes
+max(anime$episodes, na.rm = TRUE)
+```
+
+```{r}
+# Descriptive statistics
+describe(anime$episodes)
+```
+
+```{r}
+# Grouping based on episodes, name, genre, type
+episodes_group <- anime |> 
+  group_by(episodes, name, genre, type) |>  
+  summarise(
+    anime_count = n(),
+    .groups = "keep") |> 
+  arrange(desc(episodes))
+
+episodes_group
+```
+
+```{r warning = FALSE}
+# filter animes with episodes count greater than 100
+episodes_group |> 
+  filter(episodes > 100) |>
+  # create visualization based on this filter to see the distribution of episodes count
+ggplot(aes(x = episodes)) +
+  geom_histogram(binwidth = 50,
+                 fill = "blue") +
+  labs(
+    title = "Distribution of episodes",
+       x = "Number of episodes",
+       y = "Frequency"
+    ) +
+  theme_clean(base_size = 12,
+              base_family = "sans")
+```
+
+There are only a few animes that have 1000 and more episodes. Most of the animes in this data set have 1 and 2 episodes. The episode count of series ranges between 2 and 1818. So, maximum number of episodes is 1818 which belongs to the anime "Oyako Club" written in the genre "Comedy, Slice of Life" which is the answer to our fifth question:
+
+5.  **What is the maximum number of episodes and which anime it is with the maximum number of episodes?**
+
+#### Rating
+
+This column is the collection of the average ratings animes got from users. The real ratings from the users have been collected in the `rating.csv` file which was joined the the anime data frame in the later parts of the analysis. But it is still interesting column, so, observations were explored in this part too:
+
+```{r}
+describe(anime$rating)
+```
+
+```{r warning=FALSE}
+# Presentation of ratings
+ggplot(anime, aes(x = rating)) +
+  geom_boxplot(outlier.colour = "red",
+               outlier.shape = 4) +
+  theme_clean(base_size = 12,
+              base_family = "sans") +
+  labs(title = "Average ratings of animes",
+       x = "Average rating")
+```
+
+Most animes have got ratings between 6 and 7. There are both negative and positive outliers in this variable. The distribution of the rating is left-skewed:
+
+```{r}
+skewness(anime$rating, na.rm = TRUE)
+```
+
+```{r warning=FALSE}
+ggplot(anime, aes(x = rating)) +
+  geom_histogram(binwidth = 0.5,
+                 fill = "blue",
+                 color =  "black") +
+  labs(title = "Distribution of rating",
+       x = "Rating", 
+       y = "Frequency") +
+  theme_clean(base_size = 12,
+              base_family = "sans")
+```
+
+#### Members
+
+This variable is about online groups of animes. It represents how many members the group that dedicated to the single anime has:
+
+```{r}
+describe(anime$members)
+```
+
+So, this variable is also full of outliers and strangeness: It has minimum member count 5 and maximum of 1013912. Better way to work with variable was thought to be to filter out smaller member groups.
+
+```{r}
+ggplot(anime, 
+       aes(x = members)) +
+  geom_boxplot(outlier.colour = "red", 
+                           outlier.shape = 4) +
+  theme_clean(base_size = 12, 
+              base_family = "sans") +
+  labs(title = "Member groups and the member count of them",
+       x = "Members")
+```
+
+### Exploration of rating data set
+
+`rating` data frame has only three columns. Most important ones are user_id - which will be used to join it with `anime` data frame and rating which is the real rating each user rated the specific anime.
+
+```{r}
+# View first few lines to know what kind of information a data frame contains
+head(rating)
+```
+
+```{r}
+# Get summary statistics of the dataset
+summary(rating)
+```
+
+As noted at the Introduction section rating -1 meant no rating. It caused confusion in the analysis, so, it was converted to more "useful" value in data processing section.
+
+```{r}
+# Presentation of ratings
+# Confusing vizualiation: -1 is also displayed as a legal value
+ggplot(rating, aes(x = rating)) +
+  geom_boxplot(outlier.colour = "red", 
+               outlier.shape = 4) +
+  theme_clean(base_size = 12,
+              base_family = "sans") +
+  labs(title = "Ratings of animes", 
+       subtitle = "Ratings are integers from 1 to 10", 
+       x = "Rating")
+```
+
+```{r}
+# Check the data types of each column
+str(rating)
+```
+
+```{r}
+# number of columns and rows
+ncol(rating)
+nrow(rating)
+```
+
+```{r}
+# Names of columns
+colnames(rating)
+```
+
+## Joined data frame
+
+After exploring two data sets separately, they were joined based on `anime_id` column:
+
+```{r}
+animes_joined <- inner_join(anime, 
+                            rating, 
+                            by = "anime_id")
+```
+
+```{r}
+head(animes_joined)
+```
+
+```{r}
+str(animes_joined)
+```
+
+# PROCESS - DATA CLEANING
+
+Before this phase some basic data cleaning had already been applied to the anime data frame separately:
+
+-   Data type of `episodes` variable has been converted from character to double.
+
+It means when it was joined with rating data frame, `rating` variable carried its data type and values all together. So, all those -1 values are present in rating column of joined data frame. NAs. can be treated differently based on the type, purpose, reliability and other factors. In this specific analysis they were converted to average values of the rating.
+
+But before that one more problem with the joined data frame was so obvious: Column names rating.x, rating.y were not user friendly, so, they were replaced with the descriptive ones:
+
+```{r}
+# Rename rating.x, rating.y variables
+animes_joined <- animes_joined |> 
+  rename(
+    average_rating = rating.x, 
+         user_rating = rating.y
+    )
+```
+
+```{r}
+# Check data frame after renaming
+str(animes_joined)
+```
+
+In order to proceed to replace -1 values with averages, unique values in the user_rating variable were displayed. Then, to check the effectiveness of the replacement, total number of -1 ratings has been identified to compare the before and after results:
+
+```{r}
+# Distinct values in user.rating column
+unique(animes_joined$user_rating)
+```
+
+```{r}
+# Total number of -1 values
+abs(
+  sum(
+    animes_joined$user_rating[animes_joined$user_rating == -1]
+    )
+  )
+```
+
+```{r}
+# Replacement of -1 with mean value
+animes_joined$user_rating[animes_joined$user_rating == -1] <- round(
+  mean(animes_joined$user_rating,
+       na.rm = TRUE),
+  2
+  )
+```
+
+```{r}
+# Distinct values in user.rating column after the replacement
+unique(animes_joined$user_rating)
+```
+
+```{r}
+# Total number of NAs after the replacement
+sum(is.na(animes_joined$user_rating))
+```
+
+After this replacement the box plot recreated to check if there are still other anomalies in this column:
+
+```{r}
+ggplot(animes_joined, 
+       aes(x = user_rating)) +
+geom_boxplot(outlier.colour = "red", 
+             outlier.shape = 4) +
+  theme_clean(base_size = 12,
+              base_family = "sans") +
+  labs(title = "Ratings of animes",
+       subtitle = "Ratings are integers from 1 to 10",
+       x = "Rating")
+```
+
+# ANALYSIS
+
+## **Ratings of the genres**
+
+To get the summary of the ratings based on the genres, joined data frame was grouped:
+
+```{r warning=FALSE}
+genres_summary <- animes_joined |> 
+  group_by(genre) |> 
+  summarise(
+    avg_rating = round(
+      mean(user_rating,
+      na.rm = TRUE),
+      2
+      ),
+    min_rating = min(user_rating,
+                     na.rm = TRUE),
+    max_rating = max(user_rating,
+                     na.rm = TRUE)
+  ) |> 
+  arrange(desc(avg_rating))
+
+genres_summary
+```
+
+So, mangas in Action, Historical, Kids genre revealed interesting result: Their minimum, maximum ratings are 10 out of 10. Data was filtered to show the mangas in this genre:
+
+```{r}
+animes_joined |> 
+  filter(genre == "Action, Historical, Kids")
+```
+
+Only 1 manga in this genre was represented and it got 10 from the only user that watched it. It seemed suspicious so, better approach was considered to filter out this genre:
+
+```{r}
+genres_summary <- animes_joined |> 
+  filter(genre != "Action, Historical, Kids") |>
+  group_by(genre) |> 
+  summarise(
+    avg_rating = round(
+      mean(
+        user_rating, 
+        na.rm = TRUE), 
+      2
+      ),
+    min_rating = min(user_rating,
+                     na.rm = TRUE),
+    max_rating = max(user_rating, 
+                     na.rm = TRUE)
+  ) |>
+  arrange(genre)
+#   arrange(desc(avg_rating))
+
+genres_summary
+```
+
+So, even Hentai genre have more mangas, action mangas got the highest ratings which answers the third question of the analysis:
+
+3.  **What are the maximum and minimum ratings that the specific genres received and which genres have the highest user rating?**
+
+## Ratings of the types
+
+As animes were represented via different media forms, the rating based on these media forms summarized and visualized:
+
+```{r warning=FALSE}
+types_summary <- 
+  animes_joined |> 
+  group_by(type) |> 
+  summarise(
+    avg_rating = round(
+      mean(
+        user_rating,
+        na.rm = TRUE), 
+      2
+      ),
+    min_rating = min(user_rating,
+                     na.rm = TRUE),
+    max_rating = max(user_rating,
+                     na.rm = TRUE)
+  ) %>% 
+  arrange(desc(avg_rating))
+
+types_summary
+```
+
+Again the unknown type of animes was present here and it got the highest average rating. Filtering revealed that it was the same mange named Steins;Gate 0 with lacking information about type, episodes and average rating and got 7 and 9 from only 5 users. It was also filtered out:
+
+```{r warning=FALSE}
+types_summary <-
+  animes_joined |> 
+  filter(type != "") |>
+  group_by(type) |> 
+  summarise(
+    avg_rating = round(
+    mean(user_rating,
+        na.rm = TRUE),
+    2
+    ),
+    min_rating = min(user_rating, 
+                     na.rm = TRUE),
+    max_rating = max(user_rating, 
+                     na.rm = TRUE)
+  ) |> 
+  arrange(desc(avg_rating))
+
+types_summary
+```
+
+```{r}
+# Highest rated formats for mangas
+ggplot(data = types_summary, 
+                   aes(x = as_factor(type),
+                       y = avg_rating)) +
+geom_bar(stat = "identity", 
+                    fill ="blue") +
+  labs(x = "Type",
+       y = "Average rating",
+       title = "Anime types and average rating") + 
+  theme_clean(base_size = 12,
+              base_family = "sans")
+```
+
+So, beside small differences all formats seem to get higher user ratings which is the answer to the fourth question:
+
+4.  **What is the type of an animes that got the highest ratings?**
+
+## **Relationship between the number of episodes and rating**
+
+```{r}
+ggplot(animes_joined, mapping = aes(
+  x = cut(episodes, breaks = c(1, 1000, 2000)), 
+  y = user_rating)
+  ) + 
+  geom_violin(fill = "red") +
+  scale_x_discrete(
+    labels = c("1-500", 
+               "500-1000", 
+               "1000-1900")) +
+   labs(title = "Episodes and rating", 
+       x = "Number of episodes", 
+       y = "Rating") +
+  theme_clean(base_size = 12, 
+              base_family = "sans")
+```
+
+Here there are three groups:
+
+1.  Mangas with episode count between 1 to 500
+
+2.  Episode count between 500 to the 1000
+
+3.  Episode count between 1000 to the 1900 (1818 is the maximum)
+
+In each group most of the mangas received the rating above 5, so the number of episodes does not have correlation with the user rating.
+
+## **Relationship between the number of members and rating**
+
+```{r}
+ggplot(animes_joined, mapping =
+         aes(x = cut(members, breaks = 
+                  c(1, 
+                    500000, 
+                    1000000,
+                    1014000)), 
+        y = user_rating)) + 
+  geom_violin(fill = "red") +
+  scale_x_discrete(
+    labels = c("1-500000",
+               "500000-1000000",
+               "1000000-1014000")) +
+   labs(title = "Number of members and rating", 
+       x = "Members", 
+       y = "Rating") +
+  theme_clean(base_size = 12, 
+              base_family = "sans")
+```
+
+Here also, mangas have been grouped into three groups:
+
+1.  Groups with member count up to 500000
+
+2.  Member count from 500000 to 1000000
+
+3.  Member count between 1000000 to 1014000 (1013917 is the maximum)
+
+In each group most of the mangas received the rating above 5. Also, there are more mangas starting with the rating 5 in user groups with members up to 500000 than others. So the number of members in user groups does not have correlation with the user rating.
+
+# Conclusion, limitations and notes
+
+As mentioned above, genres of animes are quite complicated. The data set provided contained most animes in Hentai, comedy and music. But the combinations of these genres are different. In this case comedy, action, drama, adventure, scifi genres have more mangas.
+
+Any format of the manga are popular and mangas in all formats received almost equal ratings from the users.
+
+There are no relationship between episodes count, number of members and user rating.
+
+The major limitation of the data set is that it does not contain the information about mangas in paper format.
+
+**Notes:**
+
+This analysis was written in [Quarto](https://quarto.org) markdown document. Viewer should have at least basic understanding of R programming language, pipe operator, visualization with ggplot2 and other tools such as functions used in the analysis.
